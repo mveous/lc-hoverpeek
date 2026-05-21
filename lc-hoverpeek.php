@@ -2,12 +2,12 @@
 /**
  * Plugin Name: LC HoverPeek
  * Description: Show instant link previews in a popup when hovering over links.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author:  Lionecoders
  * Text Domain: lc-hoverpeek
  * License:     GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Tested up to: 6.9
+ * Tested up to: 7.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
