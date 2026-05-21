@@ -2,7 +2,7 @@
 /**
  * Plugin Name: LC HoverPeek
  * Description: Show instant link previews in a popup when hovering over links.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author:  Lionecoders
  * Text Domain: lc-hoverpeek
  * License:     GPLv2 or later
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'LCHO_VERSION', '1.0.1' );
+define( 'LCHO_VERSION', '1.0.3' );
 define( 'LCHO_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LCHO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
