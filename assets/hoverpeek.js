@@ -75,23 +75,27 @@ jQuery(function ($) {
 		lchoPopup = $(`
 			<div class="lcho-popup">
 				<div class="lcho-content">
-
-					${data.image ? `
-					<div class="lcho-image">
-						<img src="${data.image}" alt="">
-					</div>` : ''}
-
+					<div class="lcho-image" style="display: none;">
+						<img src="" alt="">
+					</div>
 					<div class="lcho-text">
-						<h4>${data.title}</h4>
-						<p>${data.excerpt}</p>
-						<a href="${data.link}" class="lcho-more">
+						<h4></h4>
+						<p></p>
+						<a href="" class="lcho-more">
 							Learn more →
 						</a>
 					</div>
-
 				</div>
 			</div>
 		`).appendTo('body');
+
+		if (data.image) {
+			lchoPopup.find('.lcho-image img').attr('src', data.image);
+			lchoPopup.find('.lcho-image').show();
+		}
+		lchoPopup.find('.lcho-text h4').text(data.title || '');
+		lchoPopup.find('.lcho-text p').text(data.excerpt || '');
+		lchoPopup.find('.lcho-text a.lcho-more').attr('href', data.link || '');
 
 		lchoSmartPosition(lchoPopup, x, y);
 

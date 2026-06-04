@@ -182,44 +182,16 @@ class LCHO_Core {
 		}
 
 		if ( $url ) {
-			$cache_key = 'lcho_ext_' . md5( $url );
-			$cached    = get_transient( $cache_key );
+			$data = $this->fetch_external_url( $url );
 
-			if ( $cached ) {
-				wp_send_json_success( $cached );
+			if ( 'rate_limit' === $data ) {
+				wp_send_json_error( [ 'message' => __( 'Too many requests. Please try again later.', 'lc-hoverpeek' ) ] );
 			}
 
-			$response = wp_remote_get(
-				$url,
-				array(
-					'timeout'     => 6,
-					'redirection' => 5,
-					'httpversion' => '1.1',
-					'headers'     => array(
-						'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
-					)
-				)
-			);
-
-			if ( is_wp_error( $response ) ) {
+			if ( ! $data ) {
 				wp_send_json_error();
 			}
 
-			$body = wp_remote_retrieve_body( $response );
-
-			preg_match( '/<title>(.*?)<\/title>/is', $body, $title );
-			preg_match( '/<meta name="description" content="(.*?)"/is', $body, $desc );
-			preg_match( '/<meta property="og:image" content="(.*?)"/is', $body, $img );
-
-			$data = [
-				'post_id' => 0,
-				'title'   => $title[1] ?? '',
-				'excerpt' => $desc[1] ?? '',
-				'link'    => $url,
-				'image'   => $img[1] ?? '',
-			];
-
-			set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
 			wp_send_json_success( $data );
 		}
 
@@ -262,49 +234,173 @@ class LCHO_Core {
 			}
 
 			if ( $url ) {
-				$cache_key = 'lcho_ext_' . md5( $url );
-				$cached    = get_transient( $cache_key );
-
-				if ( $cached ) {
-					$result[] = $cached;
-					continue;
+				$data = $this->fetch_external_url( $url );
+				if ( $data && 'rate_limit' !== $data ) {
+					$result[] = $data;
 				}
-
-				$response = wp_remote_get(
-					$url,
-					array(
-						'timeout'     => 6,
-						'redirection' => 5,
-						'httpversion' => '1.1',
-						'headers'     => array(
-							'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
-						)
-					)
-				);
-
-				if ( is_wp_error( $response ) ) {
-					continue;
-				}
-
-				$body = wp_remote_retrieve_body( $response );
-
-				preg_match( '/<title>(.*?)<\/title>/is', $body, $title );
-				preg_match( '/<meta name="description" content="(.*?)"/is', $body, $desc );
-				preg_match( '/<meta property="og:image" content="(.*?)"/is', $body, $img );
-
-				$data = [
-					'post_id' => 0,
-					'title'   => $title[1] ?? '',
-					'excerpt' => $desc[1] ?? '',
-					'link'    => $url,
-					'image'   => $img[1] ?? '',
-				];
-
-				set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
-				$result[] = $data;
 			}
 		}
 
 		wp_send_json_success( $result );
+	}
+
+	/**
+ * Validate external URL and block SSRF targets.
+ *
+ * @param string $url URL to validate.
+ * @return bool
+ */
+private function is_safe_external_url( $url ) {
+
+	if ( ! wp_http_validate_url( $url ) ) {
+		return false;
+	}
+
+	$parts = wp_parse_url( $url );
+
+	if ( empty( $parts['host'] ) ) {
+		return false;
+	}
+
+	// Only allow HTTP/HTTPS.
+	if ( ! in_array( $parts['scheme'], [ 'http', 'https' ], true ) ) {
+		return false;
+	}
+
+	// Restrict ports.
+	if ( ! empty( $parts['port'] ) && ! in_array( (int) $parts['port'], [ 80, 443 ], true ) ) {
+		return false;
+	}
+
+	$host = strtolower( $parts['host'] );
+
+	// Block localhost.
+	if ( in_array( $host, [ 'localhost', 'localhost.localdomain' ], true ) ) {
+		return false;
+	}
+
+	// Resolve all DNS records.
+	$records = dns_get_record( $host, DNS_A | DNS_AAAA );
+
+	if ( empty( $records ) ) {
+		return false;
+	}
+
+	foreach ( $records as $record ) {
+
+		$ip = '';
+
+		if ( ! empty( $record['ip'] ) ) {
+			$ip = $record['ip'];
+		}
+
+		if ( ! empty( $record['ipv6'] ) ) {
+			$ip = $record['ipv6'];
+		}
+
+		if ( empty( $ip ) ) {
+			continue;
+		}
+
+		if (
+			false === filter_var(
+				$ip,
+				FILTER_VALIDATE_IP,
+				FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+			)
+		) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+	/**
+	 * Securely fetch metadata for an external URL.
+	 *
+	 * @param string $url The URL to fetch.
+	 * @return array|string|false Array of metadata, 'rate_limit' on limit, or false on error.
+	 */
+	private function fetch_external_url( $url ) {
+		$url = esc_url_raw( $url );
+
+		if ( ! wp_http_validate_url( $url ) ) {
+			return false;
+		}
+
+		$cache_key = 'lcho_ext_' . md5( $url );
+		$cached    = get_transient( $cache_key );
+
+		if ( $cached ) {
+			return $cached;
+		}
+
+		// Rate limiting: check/increment requests bucket (max 20 per minute per IP)
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		if ( $ip ) {
+			$key          = 'lcho_limit_' . md5( $ip );
+			$limit_data   = get_transient( $key );
+			$current_time = time();
+
+			if ( is_array( $limit_data ) && $limit_data['expiry'] > $current_time ) {
+				if ( $limit_data['count'] >= 20 ) {
+					return 'rate_limit';
+				}
+				$limit_data['count']++;
+				$remaining_time = max( 1, $limit_data['expiry'] - $current_time );
+				set_transient( $key, $limit_data, $remaining_time );
+			} else {
+				$limit_data = [
+					'count'  => 1,
+					'expiry' => $current_time + 60,
+				];
+				set_transient( $key, $limit_data, 60 );
+			}
+		}
+
+		if ( ! $this->is_safe_external_url( $url ) ) {
+			return false;
+		}
+		
+		$response = wp_safe_remote_get(
+			$url,
+			[
+				'timeout'             => 5,
+				'redirection'         => 3,
+				'reject_unsafe_urls'  => true,
+				'httpversion'         => '1.1',
+				'headers'             => [
+					'User-Agent' => 'LC HoverPeek/' . LCHO_VERSION,
+				],
+			]
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return false;
+		}
+
+		$content_type = wp_remote_retrieve_header( $response, 'content-type' );
+		if ( empty( $content_type ) || false === stripos( $content_type, 'text/html' ) ) {
+			return false;
+		}
+
+		$body = wp_remote_retrieve_body( $response );
+
+		preg_match( '/<title>(.*?)<\/title>/is', $body, $title );
+		preg_match( '/<meta name="description" content="(.*?)"/is', $body, $desc );
+		preg_match( '/<meta property="og:image" content="(.*?)"/is', $body, $img );
+
+		$data = [
+			'post_id' => 0,
+			'title'   => isset( $title[1] ) ? wp_strip_all_tags( html_entity_decode( trim( $title[1] ) ) ) : '',
+			'excerpt' => isset( $desc[1] ) ? wp_strip_all_tags( html_entity_decode( trim( $desc[1] ) ) ) : '',
+			'link'    => $url,
+			'image'   => isset( $img[1] ) ? esc_url_raw( trim( $img[1] ) ) : '',
+		];
+
+		set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
+
+		return $data;
 	}
 }
