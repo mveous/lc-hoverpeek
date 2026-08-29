@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: LC HoverPeek
+ * Plugin URI: https://mveous.com
  * Description: Show instant link previews in a popup when hovering over links.
  * Version: 1.0.5
  * Author:  Mveous
