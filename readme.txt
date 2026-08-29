@@ -1,10 +1,10 @@
 === LC HoverPeek ===
-Contributors: lionecoders, deep7197
+Contributors: mveous, deep7197, lionecoders
 Tags: link preview, hover, link, post preview, preview
 Requires at least: 5.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.2
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -111,6 +111,10 @@ Yes. The hover preview functionality uses JavaScript and AJAX.
 3. External link preview
 
 == Changelog ==
+
+= 1.0.5 =
+* Tested Upto WP 7.1
+
 = 1.0.4 =
 * Security Hardening: Patched unauthenticated SSRF vulnerability in preview handlers.
 * Security Hardening: Added input validation, rate limiting, and output sanitization for remote URL fetching.
