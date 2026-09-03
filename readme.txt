@@ -1,5 +1,5 @@
 === LC HoverPeek ===
-Contributors: mveous, deep7197, lionecoders
+Contributors: deep7197
 Tags: link preview, hover, link, post preview, preview
 Requires at least: 5.0
 Tested up to: 7.1
